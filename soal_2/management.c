@@ -18,7 +18,7 @@
 #define LOG_FILE "/home/masgan/soal_2/history.log"
 #define RUNNING_DIR "/home/masgan/soal_2"
 #define BACKUP_DIR "/home/masgan/soal_2/library/backup"
-#define DOWNLOAD_URL "https://drive.google.com/file/d/1rUIZmp10lXLtCIH3LAZJzRPeRks3Crup/"
+#define DOWNLOAD_URL "https://drive.google.com/file/d/1rUIZmp10lXLtCIH3LAZJzRPeRks3Crup"
 #define ZIP_FILE "/home/masgan/soal_2/file.zip"
 
 volatile sig_atomic_t signal_flag = 0;
