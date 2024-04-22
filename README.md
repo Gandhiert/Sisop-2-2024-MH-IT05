@@ -272,3 +272,148 @@ void close_all_apps()
 void close_apps_from_config(const char *config_file)
 ```
 >Fungsi ini menutup aplikasi-aplikasi yang didefinisikan dalam file konfigurasi.
+
+```
+pid_t spawn_process(const char *app) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp(app, app, NULL);
+        perror("execlp");
+        exit(1);
+    } else if (pid < 0) {
+        perror("fork");
+        exit(1);
+    }
+    return pid;
+}
+```
+>Fungsi untuk memulai sebuah proses aplikasi
+
+```
+void kill_process(const char *app) {
+    pid_t pid;
+    int status;
+
+    while ((pid = fork()) == -1);
+
+    if (pid == 0) {
+        execlp("pkill", "pkill", "-f", app, NULL);
+        perror("execlp");
+        exit(1);
+    } else {
+        waitpid(pid, &status, 0);
+    }
+}
+```
+>Fungsi untuk menutup proses aplikasi yang berjalan
+
+#### b. Program dapat membuka berbagai macam aplikasi dan banyak jendela aplikasi sekaligus (bisa membuka 1 atau lebih aplikasi dengan 1 atau lebih window (kecuali aplikasi yang tidak bisa dibuka dengan banyak window seperti discord)) dengan menjalankan: 
+#### ./setup -o <app1> <num1> <app2> <num2>.....<appN> <numN>
+#### Contoh penggunaannya adalah sebagai berikut: 
+#### ./setup -o firefox 2 wireshark 2
+#### Program akan membuka 2 jendela aplikasi firefox dan 2 jendela aplikasi wireshark.
+
+- Untuk menyelesaikan soal ini, kita bisa menggunakan for loops untuk menjalankan fungsi "spawn_process" untuk menjalankan aplikasi sesuai permintaan dengan jumlah tertentu.
+
+```
+void open_apps(int num_apps, char *apps[], int *num_windows) {
+    for (int i = 0; i < num_apps; i++) {
+        for (int j = 0; j < num_windows[i]; j++) {
+            spawn_process(apps[i]);
+        }
+    }
+}
+```
+
+#### c. Program juga dapat membuka aplikasi dengan menggunakan file konfigurasi dengan menggunakan 
+#### ./setup -f file.conf 
+#### Format file konfigurasi dibebaskan, namun pastikan dapat menjalankan fitur dari poin 2.
+#### Contoh isi file.conf:
+#### Firefox 2
+#### Wireshark 3
+#### Ketika menjalankan command contoh, program akan membuka 2 jendela aplikasi firefox dan 3 jendela aplikasi wireshark.
+
+- Soal ini dapat diselesaikan dengan membuat fungsi yang dapat membaca isi dari file config yang kemudian akan dianggap sebagai "app" dan "num_apps" yang kemudian akan diproses kurang lebih sama seperti poin b.
+
+```
+void open_apps_from_config(const char *config_file) {
+    FILE *file = fopen(config_file, "r");
+    if (file == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+
+    char app[MAX_NAME_LENGTH];
+    int num_windows;
+
+    while (fscanf(file, "%s %d", app, &num_windows) == 2) {
+        for (int j = 0; j < num_windows; j++) {
+            spawn_process(app);
+        }
+    }
+
+    fclose(file);
+}
+```
+
+#### d. Program dapat mematikan semua aplikasi yg dijalankan oleh program tersebut dengan: 
+#### ./setup -k
+
+- Untuk menutup aplikasi yang sudah dibuka, bisa memanggil fungsi "kill_process" untuk aplikasi yang akan ditutup. Disini saya menggunakan contoh firefox dan wireshark.
+
+```
+void close_all_apps() {
+    kill_process("firefox");
+    kill_process("wireshark");
+}
+```
+
+#### e. Program juga dapat mematikan aplikasi yang dijalankan sesuai dengan file konfigurasi. 
+#### Contohnya: 
+#### ./setup -k file.conf 
+#### Command ini hanya mematikan aplikasi yang dijalankan dengan 
+#### ./setup -f file.conf
+
+- Terakhir, agar dapat menutup aplikasi sesuai dengan isi dari config file, dapat diimplementasikan fungsi seperti poin b dengan modifikasi dimana fungsi yang dipanggil adalah "kill_process"
+
+```
+void close_apps_from_config(const char *config_file) {
+    FILE *file = fopen(config_file, "r");
+    if (file == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+
+    char app[MAX_NAME_LENGTH];
+
+    while (fscanf(file, "%s", app) == 1) {
+        kill_process(app);
+    }
+
+    fclose(file);
+}
+```
+
+### Dokumentasi
+
+![Screenshot from 2024-04-22 23-15-05](https://github.com/Gandhiert/Sisop-2-2024-MH-IT05/assets/142889150/60a87814-9cbf-4420-a7a0-cdd7395f0018)
+> Contoh implementasi command -o.
+
+![Screenshot from 2024-04-22 23-17-31](https://github.com/Gandhiert/Sisop-2-2024-MH-IT05/assets/142889150/0d0f69ff-3c8f-4c7d-a821-4428c7b9710c)
+> Aplikasi akan terbuka sesuai dengan permintaaan user, yaitu firefox dan wireshark sejumlah yang diminta user.
+
+![Screenshot from 2024-04-22 23-18-34](https://github.com/Gandhiert/Sisop-2-2024-MH-IT05/assets/142889150/f2d0c780-75bf-4924-a7a1-2d6e8896b6ca)
+>Aplikasi yang dibuka akan tertutup.
+
+![Screenshot from 2024-04-22 23-34-29](https://github.com/Gandhiert/Sisop-2-2024-MH-IT05/assets/142889150/eac0224b-41ec-482c-88ba-77d3b2d8a8d2)
+> Command untuk membuka aplikasi berdasarkan file config.
+
+![image](https://github.com/Gandhiert/Sisop-2-2024-MH-IT05/assets/142889150/d179a2c1-eab6-4f50-8ba3-9ab82feb0ca4)
+> Contoh isi file config.
+
+
+
+
+
+
+
