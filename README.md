@@ -13,7 +13,7 @@ Aisha Ayya Ratiandari - 5027231056
 Gandhi Ert Julio - 5027231081
 
 ## _Soal 1_
-## Dikerjakan oleh Aisha Ayya (5027231056)
+### Dikerjakan oleh Aisha Ayya (5027231056)
 
 ```cpp
 #include <stdio.h>
@@ -232,7 +232,299 @@ After
 ## _Soal 2_
 
 ## _Soal 3_
+### Dikerjakan oleh Aisha Ayya (5027231056)
 
+```cpp
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <time.h>
+#include <dirent.h>
+#include <errno.h>
+```
+
+Header yang digunakan, berupa
+
+- unistd.h = untuk mengerjakan fungsi dan proses seperti fork, exec, exit,  dan melakukan aksi kepada sebuah file seperti membuka, dan membaca
+- sys/types.h = untuk menggunakan tipe data seperti id_t dan size_t
+- sys/wait.h = untuk melakukan proses seperti wait dan waitpid
+- sys/stat.h = untuk mengurus status dan izin file
+- fcntl.h = untuk melakukan aksi ke file
+- errno.h = untuk menangani eror
+
+```cpp
+#define NAMA_USER 50
+#define LOG_FILE_EXTENSION ".log"
+#define STATUS_FILE_EXTENSION ".txt"
+```
+
+men-define nama USER dengan batas 50 karakter, lalu untuk sebuah file log akan dinamakan “.log” dan untuk file tambahan dimana disana akan disimpan nilai prosesnya (apakah berhasil atau tidak sebagai nilai boolean)
+
+```cpp
+void log_activity(const char *username, const char *activity_name, pid_t pid, const char *status) {
+    // Membuat string waktu
+    time_t raw_time;
+    struct tm *time_info;
+    char time_str[20];
+    time(&raw_time);
+    time_info = localtime(&raw_time);
+    strftime(time_str, sizeof(time_str), "%d:%m:%Y-%H:%M:%S", time_info);
+
+    // Membuat nama file log
+    char log_filename[NAMA_USER + sizeof(LOG_FILE_EXTENSION)];
+    snprintf(log_filename, sizeof(log_filename), "%s%s", username, LOG_FILE_EXTENSION);
+
+    // Membuka file log
+    FILE *log_file = fopen(log_filename, "a");
+    if (log_file == NULL) {
+        perror("Gagal membuka file log");
+        exit(EXIT_FAILURE);
+    }
+
+    // Menulis ke file log
+    fprintf(log_file, "[%s]-pid_%d-%s_%s\n", time_str, pid, activity_name, status);
+    fclose(log_file);
+}
+```
+
+fungsi untuk mencatat aktivitas pengguna yang nanti akan disimpan di file log
+
+- mengambil informasi waktu secar areal time yang nanti akan disimpan di dalam fungsi localtime() dna memformatnya menjadi **[dd:mm:yyyy]-[hh:mm:ss]**
+- lalu membuat array untuk nama file lognya, disini kita mengambil nama username untuk dijadikan nama file
+- lalu membuka file lognya dan menulis data ke dalam file log sesuai format yaitu waktu proses, pid, aktivitasnya, dan status
+
+```cpp
+int is_process_running(pid_t pid) {
+    char proc_path[32];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+
+    // Mencoba membuka direktori proc
+    DIR *dir = opendir(proc_path);
+    if (dir != NULL) {
+        struct dirent *entry;
+        int found = 0; // Deklarasi variabel entry dan found
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_DIR) {
+                char *endptr;
+                long current_pid = strtol(entry->d_name, &endptr, 10); // Menggunakan variabel current_pid untuk pid proses saat ini
+                if (*endptr == '\0') {
+                    char filename[128];
+                    snprintf(filename, sizeof(filename), "/proc/%ld/comm", current_pid);
+                    FILE *comm = fopen(filename, "r");
+                    if (comm != NULL) {
+                        char cmd[64];
+                        fgets(cmd, sizeof(cmd), comm);
+                        fclose(comm);
+                        if (strcmp(cmd, "bash\n") == 0) { // Mengganti proc_name dengan string "bash\n" karena kita ingin memeriksa apakah proses tersebut adalah bash
+                            found = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        closedir(dir);
+        return found;
+    }
+
+    return 0; // Proses tidak berjalan
+}
+```
+
+fungsi untuk memeriksa apakah proses dengan PID tertentu sedang berjalan atau tidak
+
+- membuat lamat baru ke direktori /proc
+- dimana nanti nama proses dalam direktori tersebut sama dengan nama PID-nya, dimana dengan PID tersebut akan diketahui apakah proses berjalan atau tidak
+
+- dari direktori tersebut, akan kita loop untuk membaca setiap entrinya, untuk mencari folder/proses tertentu
+- entri tersebut akan dikonversi ke format long dimana kita mendapatkan PID_process nya
+- lalu kita memformat pathnya ke file “comm” dan membuka filenya
+- dalam file akan di cek nama perintahnya, jika hasilnya bash maka  proses tersebut adalah shell bash = sedang berjalan
+    - Jika proses tersebut ditemukan, kita mengembalikan nilai **`1`** untuk menunjukkan bahwa proses sedang berjalan.
+    - Jika tidak ditemukan, kita mengembalikan nilai **`0`** untuk menunjukkan bahwa proses tidak berjalan.
+
+```cpp
+void start_monitoring(const char *username) {
+    // Memulai pemantauan aktivitas pengguna
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Proses anak
+        setsid(); // Membuat sesi baru
+        
+        // Loop untuk pemantauan aktivitas pengguna
+        while (1) {
+            // Membaca status dari file
+            char status_filename[NAMA_USER + sizeof(STATUS_FILE_EXTENSION)];
+            snprintf(status_filename, sizeof(status_filename), "%s%s", username, STATUS_FILE_EXTENSION);
+            FILE *status_file = fopen(status_filename, "r");
+            if (status_file == NULL) {
+                perror("Gagal membuka file status");
+                exit(EXIT_FAILURE);
+            }
+            int status;
+            fscanf(status_file, "%d", &status);
+            fclose(status_file);
+            
+            // Menentukan status
+            const char *status_str = (status == 0) ? "GAGAL" : "JALAN";
+
+            // Mencatat aktivitas pengguna setiap detik
+            log_activity(username, "aktivitas", getpid(), status_str);
+
+            sleep(1);
+        }
+        exit(EXIT_SUCCESS); // Exit setelah selesai
+    }
+}
+```
+
+fungsi untuk berhenti memantau aktivitas pengguna
+
+- membuat string dengan nama file lognya untuk menghapus file lognya
+- membuka direktori /proc dan dengan loop membaca semua proses PID yang sedang berjalan dalam sistem
+- lalu fungsi akan mengecek apakah proses adalah proses anak yang sedang berjalan dengan membuka cmdlinenya
+- jika baris perintah dari entri tersebut berisi “admin -m” maka akan kita kirim sinyal SIGTERM  menggunakan kill (pid,SIGTERM)
+
+```cpp
+void block_user_activity(const char *username) {
+    // Memblokir aktivitas pengguna
+    char status_filename[NAMA_USER + sizeof(STATUS_FILE_EXTENSION)];
+    snprintf(status_filename, sizeof(status_filename), "%s%s", username, STATUS_FILE_EXTENSION);
+    FILE *status_file = fopen(status_filename, "w");
+    if (status_file == NULL) {
+        perror("Gagal membuka file status");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(status_file, "0\n"); // Status: GAGAL
+    fclose(status_file);
+}
+```
+
+fungsi untuk memblokir aktivitas pengguna dan menambahkannya menjadi status terbaru
+
+- membuat filename berdasarkan username lalu membuka file tersebut
+- lalu menulis status dalam file tersebut menjadi “0” yang artinya gagal
+
+ 
+
+```cpp
+void unblock_user_activity(const char *username) {
+    // Membuka blokir aktivitas pengguna
+    char status_filename[NAMA_USER + sizeof(STATUS_FILE_EXTENSION)];
+    snprintf(status_filename, sizeof(status_filename), "%s%s", username, STATUS_FILE_EXTENSION);
+    FILE *status_file = fopen(status_filename, "w");
+    if (status_file == NULL) {
+        perror("Gagal membuka file status");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(status_file, "1\n"); // Status: JALAN
+    fclose(status_file);
+}
+```
+
+fungsi untuk membuka blokiran aktivitas pengguna dan menambahkan status terbaru
+
+- membuat filename berdasarkan username lalu membuka file tersebut
+- lalu menulis status dalam file tersebut menjadi “1” yang artinya jalan
+
+```cpp
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        printf("Penggunaan: %s -m/-s/-c/-a <user>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    char *option = argv[1];
+    char *username = argv[2];
+
+    signal(SIGTERM, handle_signal);
+
+    // Membuat file log dan file status secara otomatis saat program dijalankan
+    create_log_file(username);
+
+    if (strcmp(option, "-m") == 0) {
+        // Memulai pemantauan aktivitas pengguna
+        start_monitoring(username);
+    } else if (strcmp(option, "-s") == 0) {
+        // Menghentikan pemantauan aktivitas pengguna
+        stop_monitoring(username);
+    } else if (strcmp(option, "-c") == 0) {
+        // Memblokir aktivitas pengguna
+        stop_monitoring(username); // Memastikan proses pemantauan dihentikan terlebih dahulu
+        block_user_activity(username);
+    } else if (strcmp(option, "-a") == 0) {
+        // Membuka blokir aktivitas pengguna
+        unblock_user_activity(username);
+        start_monitoring(username); // Memulai pemantauan kembali
+    } else {
+        printf("Opsi tidak valid\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+```
+
+fungsi main
+
+- mengecek argumen yang diberikan user
+- program mengambil opsi dan user yang akan diproses nantinya
+- program mengatur sinyalnya dengan SIGTERM
+- membuat file log dengan nama file menggunakan username dengan cara memanggil fungsi yang telah dibuat sebelumnya
+- melanjutkan program sesuai dengan opsi yang dipilih user
+    - jika memilih “-m” maka akan memanggil fungsi start_monitoring
+    - jika memilih opsi “-s” maka akan memanggil fungsi stop_monitoring
+    - jika memilih opsi “-c_ maka akan memanggil fungsi block_user_activity
+    - jika memilih opsi “-a” maka akan memanggil fungsi unblock_user_activity dan menjalankan kembali program dengan fungsi start_monitoring
+
+Dokumentasi saat program dijalankan:
+
+![Screen Shot 2024-04-27 at 01.12.05.png](Nomor%203%20brayy%20dbb4136d5df24177bc6b2cc217cc1eee/Screen_Shot_2024-04-27_at_01.12.05.png)
+
+menjalankan dengan command:
+
+- gcc -o admin admin.c
+    
+    untuk menjalankan file c dengan compiler
+    
+- ./admin -m vagrant
+    
+    command soal untuk memantau proses apa saja yang dilakukan oleh user.
+    
+- cat vagrant.txt
+    
+    untuk melihat apakah kode berhasil JALAN atau GAGAL
+    
+- cat vagrant.log
+    
+    untuk melihat kode berjalan setiap detiknya sesuai dengan format
+    
+    ![Screen Shot 2024-04-27 at 01.14.59.png](Nomor%203%20brayy%20dbb4136d5df24177bc6b2cc217cc1eee/Screen_Shot_2024-04-27_at_01.14.59.png)
+    
+- ./admin -c vagrant
+    
+    command soal untuk memeberhentikan proses yang diinginkan 
+    
+
+![Screen Shot 2024-04-27 at 01.18.43.png](Nomor%203%20brayy%20dbb4136d5df24177bc6b2cc217cc1eee/Screen_Shot_2024-04-27_at_01.18.43.png)
+
+![Screen Shot 2024-04-27 at 01.19.33.png](Nomor%203%20brayy%20dbb4136d5df24177bc6b2cc217cc1eee/Screen_Shot_2024-04-27_at_01.19.33.png)
+
+- ./admin -a vagrant
+    
+    untuk mematikan fitur sebelumnya
+    
+
+![Screen Shot 2024-04-27 at 01.21.04.png](Nomor%203%20brayy%20dbb4136d5df24177bc6b2cc217cc1eee/Screen_Shot_2024-04-27_at_01.21.04.png)
+
+- ./admin -s vagrant
+    
+    untuk mematikan fitur -m yang pertama kali kita jalankan
 ## _Soal 4_
 ### Dikerjakan Oleh Fikri Aulia As Sa'adi (5027231026)
 Salomo memiliki passion yang sangat dalam di bidang sistem operasi. Saat ini, dia ingin mengotomasi kegiatan-kegiatan yang ia lakukan agar dapat bekerja secara efisien. Bantulah Salomo untuk membuat program yang dapat mengotomasi kegiatan dia!
